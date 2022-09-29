@@ -23,7 +23,7 @@ func mapToBookPb(book model.Book) *pb.Book {
 	}
 }
 
-// implement all method BookServiceServer
+// Implementing interface BookServiceServer
 func (*Server) GetBook(ctx context.Context, req *pb.GetBookRequest) (*pb.GetBookResponse, error) {
 	var bookID string = req.GetId()
 	_, res := service.GetBook(bookID)

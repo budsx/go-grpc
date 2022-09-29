@@ -4,6 +4,7 @@ package book;
 
 option go_package = "./book";
 
+//  struct Book
 message Book {
     string id = 1;
     string title = 2;
@@ -11,6 +12,9 @@ message Book {
     bool is_read = 4;
 }
 
+// membuat objek request dan response 
+// atau bisa disebut juga dao / dto 
+// membuat struct request dan response
 message GetBookRequest {
     string id = 1;
 }
@@ -62,6 +66,7 @@ message AddBatchBookResponse {
   string message = 2;
 }
 
+// service adalah interface yang akan diimplementasikan oleh server
 service BookService {
     rpc GetBook(GetBookRequest) returns (GetBookResponse) {}
     rpc AddBook(AddBookRequest) returns (AddBookResponse) {}

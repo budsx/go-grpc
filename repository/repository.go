@@ -2,7 +2,6 @@ package repository
 
 import "grpc-unary/model"
 
-// localstorage
 var storage []model.Book = []model.Book{}
 
 // Add Book
