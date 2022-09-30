@@ -4,7 +4,7 @@
 // - protoc             v3.21.6
 // source: book/book.proto
 
-package book
+package bookpb
 
 import (
 	context "context"
@@ -26,8 +26,8 @@ type BookServiceClient interface {
 	AddBook(ctx context.Context, in *AddBookRequest, opts ...grpc.CallOption) (*AddBookResponse, error)
 	UpdateBook(ctx context.Context, in *UpdateBookRequest, opts ...grpc.CallOption) (*UpdateBookResponse, error)
 	DeleteBook(ctx context.Context, in *DeleteBookRequest, opts ...grpc.CallOption) (*DeleteBookResponse, error)
-	GetBooks(ctx context.Context, in *GetBooksRequest, opts ...grpc.CallOption) (*GetBooksResponse, error)
-	AddBatchBook(ctx context.Context, in *AddBatchBookRequest, opts ...grpc.CallOption) (*AddBatchBookResponse, error)
+	GetBooks(ctx context.Context, in *GetBooksRequest, opts ...grpc.CallOption) (BookService_GetBooksClient, error)
+	AddBatchBook(ctx context.Context, opts ...grpc.CallOption) (BookService_AddBatchBookClient, error)
 }
 
 type bookServiceClient struct {
@@ -74,22 +74,70 @@ func (c *bookServiceClient) DeleteBook(ctx context.Context, in *DeleteBookReques
 	return out, nil
 }
 
-func (c *bookServiceClient) GetBooks(ctx context.Context, in *GetBooksRequest, opts ...grpc.CallOption) (*GetBooksResponse, error) {
-	out := new(GetBooksResponse)
-	err := c.cc.Invoke(ctx, "/book.BookService/GetBooks", in, out, opts...)
+func (c *bookServiceClient) GetBooks(ctx context.Context, in *GetBooksRequest, opts ...grpc.CallOption) (BookService_GetBooksClient, error) {
+	stream, err := c.cc.NewStream(ctx, &BookService_ServiceDesc.Streams[0], "/book.BookService/GetBooks", opts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	x := &bookServiceGetBooksClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
 }
 
-func (c *bookServiceClient) AddBatchBook(ctx context.Context, in *AddBatchBookRequest, opts ...grpc.CallOption) (*AddBatchBookResponse, error) {
-	out := new(AddBatchBookResponse)
-	err := c.cc.Invoke(ctx, "/book.BookService/AddBatchBook", in, out, opts...)
+type BookService_GetBooksClient interface {
+	Recv() (*GetBooksResponse, error)
+	grpc.ClientStream
+}
+
+type bookServiceGetBooksClient struct {
+	grpc.ClientStream
+}
+
+func (x *bookServiceGetBooksClient) Recv() (*GetBooksResponse, error) {
+	m := new(GetBooksResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *bookServiceClient) AddBatchBook(ctx context.Context, opts ...grpc.CallOption) (BookService_AddBatchBookClient, error) {
+	stream, err := c.cc.NewStream(ctx, &BookService_ServiceDesc.Streams[1], "/book.BookService/AddBatchBook", opts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	x := &bookServiceAddBatchBookClient{stream}
+	return x, nil
+}
+
+type BookService_AddBatchBookClient interface {
+	Send(*AddBatchBookRequest) error
+	CloseAndRecv() (*AddBatchBookResponse, error)
+	grpc.ClientStream
+}
+
+type bookServiceAddBatchBookClient struct {
+	grpc.ClientStream
+}
+
+func (x *bookServiceAddBatchBookClient) Send(m *AddBatchBookRequest) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *bookServiceAddBatchBookClient) CloseAndRecv() (*AddBatchBookResponse, error) {
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	m := new(AddBatchBookResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 // BookServiceServer is the server API for BookService service.
@@ -100,8 +148,8 @@ type BookServiceServer interface {
 	AddBook(context.Context, *AddBookRequest) (*AddBookResponse, error)
 	UpdateBook(context.Context, *UpdateBookRequest) (*UpdateBookResponse, error)
 	DeleteBook(context.Context, *DeleteBookRequest) (*DeleteBookResponse, error)
-	GetBooks(context.Context, *GetBooksRequest) (*GetBooksResponse, error)
-	AddBatchBook(context.Context, *AddBatchBookRequest) (*AddBatchBookResponse, error)
+	GetBooks(*GetBooksRequest, BookService_GetBooksServer) error
+	AddBatchBook(BookService_AddBatchBookServer) error
 	mustEmbedUnimplementedBookServiceServer()
 }
 
@@ -121,11 +169,11 @@ func (UnimplementedBookServiceServer) UpdateBook(context.Context, *UpdateBookReq
 func (UnimplementedBookServiceServer) DeleteBook(context.Context, *DeleteBookRequest) (*DeleteBookResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteBook not implemented")
 }
-func (UnimplementedBookServiceServer) GetBooks(context.Context, *GetBooksRequest) (*GetBooksResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetBooks not implemented")
+func (UnimplementedBookServiceServer) GetBooks(*GetBooksRequest, BookService_GetBooksServer) error {
+	return status.Errorf(codes.Unimplemented, "method GetBooks not implemented")
 }
-func (UnimplementedBookServiceServer) AddBatchBook(context.Context, *AddBatchBookRequest) (*AddBatchBookResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method AddBatchBook not implemented")
+func (UnimplementedBookServiceServer) AddBatchBook(BookService_AddBatchBookServer) error {
+	return status.Errorf(codes.Unimplemented, "method AddBatchBook not implemented")
 }
 func (UnimplementedBookServiceServer) mustEmbedUnimplementedBookServiceServer() {}
 
@@ -212,40 +260,51 @@ func _BookService_DeleteBook_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
-func _BookService_GetBooks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetBooksRequest)
-	if err := dec(in); err != nil {
-		return nil, err
+func _BookService_GetBooks_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(GetBooksRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
 	}
-	if interceptor == nil {
-		return srv.(BookServiceServer).GetBooks(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/book.BookService/GetBooks",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(BookServiceServer).GetBooks(ctx, req.(*GetBooksRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+	return srv.(BookServiceServer).GetBooks(m, &bookServiceGetBooksServer{stream})
 }
 
-func _BookService_AddBatchBook_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AddBatchBookRequest)
-	if err := dec(in); err != nil {
+type BookService_GetBooksServer interface {
+	Send(*GetBooksResponse) error
+	grpc.ServerStream
+}
+
+type bookServiceGetBooksServer struct {
+	grpc.ServerStream
+}
+
+func (x *bookServiceGetBooksServer) Send(m *GetBooksResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _BookService_AddBatchBook_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(BookServiceServer).AddBatchBook(&bookServiceAddBatchBookServer{stream})
+}
+
+type BookService_AddBatchBookServer interface {
+	SendAndClose(*AddBatchBookResponse) error
+	Recv() (*AddBatchBookRequest, error)
+	grpc.ServerStream
+}
+
+type bookServiceAddBatchBookServer struct {
+	grpc.ServerStream
+}
+
+func (x *bookServiceAddBatchBookServer) SendAndClose(m *AddBatchBookResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *bookServiceAddBatchBookServer) Recv() (*AddBatchBookRequest, error) {
+	m := new(AddBatchBookRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
-	if interceptor == nil {
-		return srv.(BookServiceServer).AddBatchBook(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/book.BookService/AddBatchBook",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(BookServiceServer).AddBatchBook(ctx, req.(*AddBatchBookRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+	return m, nil
 }
 
 // BookService_ServiceDesc is the grpc.ServiceDesc for BookService service.
@@ -271,15 +330,18 @@ var BookService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "DeleteBook",
 			Handler:    _BookService_DeleteBook_Handler,
 		},
+	},
+	Streams: []grpc.StreamDesc{
 		{
-			MethodName: "GetBooks",
-			Handler:    _BookService_GetBooks_Handler,
+			StreamName:    "GetBooks",
+			Handler:       _BookService_GetBooks_Handler,
+			ServerStreams: true,
 		},
 		{
-			MethodName: "AddBatchBook",
-			Handler:    _BookService_AddBatchBook_Handler,
+			StreamName:    "AddBatchBook",
+			Handler:       _BookService_AddBatchBook_Handler,
+			ClientStreams: true,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
 	Metadata: "book/book.proto",
 }
